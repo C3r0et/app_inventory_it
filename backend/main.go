@@ -10,6 +10,7 @@ import (
 	_ "image/png"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -144,8 +145,16 @@ func main() {
 
 	// File Upload
 	r.HandleFunc("/api/upload", uploadFile).Methods("POST", "OPTIONS")
-	// Serve static files
-	r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads/"))))
+	// Serve static files with proper APK MIME type and attachment header
+	_ = mime.AddExtensionType(".apk", "application/vnd.android.package-archive")
+	uploadFs := http.FileServer(http.Dir("./uploads/"))
+	r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(strings.ToLower(r.URL.Path), ".apk") {
+			w.Header().Set("Content-Type", "application/vnd.android.package-archive")
+			w.Header().Set("Content-Disposition", "attachment; filename=\"Sahabat_Sakinah_Asset.apk\"")
+		}
+		uploadFs.ServeHTTP(w, r)
+	})))
 
 	// Statistics & Executive Analytics
 	r.HandleFunc("/api/stats", getStats).Methods("GET", "OPTIONS")

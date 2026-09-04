@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Lock, User } from 'lucide-react';
+import { Lock, User, Smartphone, Download } from 'lucide-react';
 
 export const LoginPage = () => {
   const [username, setUsername] = useState('');
@@ -83,7 +83,39 @@ export const LoginPage = () => {
             Default credentials: <code className="text-blue-400">admin / admin123</code>
           </div>
         </form>
+
+        {/* Mobile App Download Card */}
+        <div className="mt-8 pt-6 border-t border-slate-700/80">
+          <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-700/70 hover:border-blue-500/40 transition">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
+                  <Smartphone size={20} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-white text-sm truncate">Sahabat Sakinah Mobile</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 shrink-0">
+                      APK Android
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 truncate">Scan QR / Barcode & Audit Lapangan (36 MB)</p>
+                </div>
+              </div>
+              <a
+                href="/uploads/Sahabat_Sakinah_Asset.apk"
+                download="Sahabat_Sakinah_Asset.apk"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white text-xs font-semibold rounded-lg shadow-md shadow-blue-600/25 transition active:scale-95 shrink-0"
+                title="Download Aplikasi Mobile Android"
+              >
+                <Download size={14} />
+                <span>Unduh</span>
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
+

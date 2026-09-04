@@ -14,7 +14,8 @@ import {
   Menu,
   X,
   QrCode,
-  Folder
+  Folder,
+  Smartphone
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -87,6 +88,24 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
             );
           })}
         </nav>
+
+        {/* Mobile App Download */}
+        <div className="p-3 border-t border-slate-700/60">
+          <a
+            href="/uploads/Sahabat_Sakinah_Asset.apk"
+            download="Sahabat_Sakinah_Asset.apk"
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 transition text-sm font-medium ${!sidebarOpen ? 'justify-center px-0' : ''}`}
+            title="Download Mobile App (Android APK)"
+          >
+            <Smartphone size={18} className="shrink-0 text-blue-400" />
+            {sidebarOpen && (
+              <div className="flex-1 flex items-center justify-between text-xs">
+                <span>Download App</span>
+                <span className="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-[10px] font-semibold">APK</span>
+              </div>
+            )}
+          </a>
+        </div>
 
         {/* User Info & Logout */}
         <div className="p-4 border-t border-slate-700">
