@@ -22,6 +22,7 @@ export const useSSE = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<ActivityEvent | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const activeToastIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const sseUrl = `${getApiBaseUrl()}/api/sse`;
@@ -60,9 +61,24 @@ export const useSSE = () => {
           actionColor = 'text-rose-400';
         }
 
-        toast(
-          () => (
-            <div className="flex flex-col gap-1 text-sm max-w-sm">
+        // Keep maximum 2 toasts visible simultaneously so screen never clutters
+        while (activeToastIdsRef.current.length >= 2) {
+          const oldestId = activeToastIdsRef.current.shift();
+          if (oldestId) {
+            toast.dismiss(oldestId);
+          }
+        }
+
+        const newToastId = toast(
+          (t) => (
+            <div 
+              onClick={() => {
+                toast.dismiss(t.id);
+                activeToastIdsRef.current = activeToastIdsRef.current.filter((id) => id !== t.id);
+              }}
+              className="flex flex-col gap-1 text-sm max-w-sm cursor-pointer select-none group"
+              title="Klik untuk langsung menutup"
+            >
               <div className="flex items-center justify-between gap-2 border-b border-slate-700/60 pb-1">
                 <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                   {sourceBadge}
@@ -70,7 +86,9 @@ export const useSSE = () => {
                 <span className={`text-[11px] font-bold ${actionColor}`}>
                   {actionLabel}
                 </span>
-                <span className="text-[10px] text-slate-400">{data.timestamp ? data.timestamp.substring(11, 19) : ''}</span>
+                <span className="text-[10px] text-slate-400 group-hover:text-rose-400 transition">
+                  {data.timestamp ? data.timestamp.substring(11, 19) : ''} ✕
+                </span>
               </div>
               <div className="font-semibold text-white mt-0.5">
                 {data.entity_id ? `ID: ${data.entity_id}` : data.user}
@@ -81,7 +99,7 @@ export const useSSE = () => {
             </div>
           ),
           {
-            duration: 5000,
+            duration: 2500, // Cepat hilang otomatis dalam 2.5 detik
             position: 'top-right',
             style: {
               background: '#0f172a',
@@ -92,6 +110,14 @@ export const useSSE = () => {
             },
           }
         );
+
+        activeToastIdsRef.current.push(newToastId);
+
+        // Auto remove from active tracker after duration + buffer
+        setTimeout(() => {
+          activeToastIdsRef.current = activeToastIdsRef.current.filter((id) => id !== newToastId);
+        }, 2700);
+
       } catch (err) {
         console.error('Failed to parse SSE activity event:', err);
       }
