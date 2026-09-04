@@ -28,6 +28,10 @@ jobs:
         working-directory: asset_mobile
         run: flutter pub get
 
+      - name: Install CocoaPods Dependencies
+        working-directory: asset_mobile/ios
+        run: pod install --repo-update
+
       - name: Build iOS Application (Release Mode)
         working-directory: asset_mobile
         run: flutter build ios --release --no-codesign
