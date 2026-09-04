@@ -69,17 +69,47 @@ class _AssetListScreenState extends State<AssetListScreen> with AutomaticKeepAli
   Future<void> _loadAssets() async {
     final dbService = context.read<DatabaseService>();
     final query = _searchController.text.trim();
-    final assets = await dbService.getAllAssets(
+    List<Asset> assets = await dbService.getAllAssets(
       query: query.isNotEmpty ? query : null,
       statusFilter: _filterStatus,
       limit: 150,
     );
+
     if (mounted) {
       setState(() {
         _filteredAssets = assets;
         _sortAssets();
         _isLoading = false;
       });
+    }
+
+    // Jika sedang mencari kata kunci, cari juga ke server agar aset dengan nomor sama (misal KB & MS) langsung muncul dua-duanya
+    if (query.isNotEmpty) {
+      try {
+        final remoteAssets = await ApiService.searchAssets(query);
+        final existingIds = assets.map((a) => a.id).toSet();
+        bool hasNew = false;
+        for (var ra in remoteAssets) {
+          if (!existingIds.contains(ra.id)) {
+            if (_filterStatus == null || _filterStatus == 'ALL' || ra.status == _filterStatus) {
+              assets.add(ra);
+              existingIds.add(ra.id);
+              hasNew = true;
+            }
+            try {
+              await dbService.insertAsset(ra);
+            } catch (_) {}
+          }
+        }
+        if (hasNew && mounted) {
+          setState(() {
+            _filteredAssets = assets;
+            _sortAssets();
+          });
+        }
+      } catch (_) {
+        // Offline mode: tetap gunakan hasil lokal
+      }
     }
   }
 

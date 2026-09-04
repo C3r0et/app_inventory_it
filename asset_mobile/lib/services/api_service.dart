@@ -111,28 +111,49 @@ class ApiService {
     }
   }
 
+  // Smart search returning all matching assets (e.g. both KB-1126 and MS-1126)
+  static Future<List<Asset>> searchAssets(String query) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/assets/search?q=${Uri.encodeComponent(query)}'),
+      ).timeout(const Duration(seconds: 10));
+      
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return decoded.map((j) => Asset.fromJson(j as Map<String, dynamic>)).toList();
+        } else if (decoded is Map<String, dynamic>) {
+          return [Asset.fromJson(decoded)];
+        }
+        return [];
+      } else if (response.statusCode == 404) {
+        return [];
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('searchAssets error: $e');
+      return [];
+    }
+  }
+
   // Smart search by Serial Number, Legacy Code, or Asset ID
   static Future<Map<String, dynamic>?> searchAsset(String query) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/assets/search?q=${Uri.encodeComponent(query)}'),
-    ).timeout(const Duration(seconds: 10));
-    
-    if (response.statusCode == 200) {
-      final decoded = json.decode(response.body);
-      if (decoded is List) {
-        if (decoded.isNotEmpty) {
-          return decoded.first as Map<String, dynamic>;
-        }
-        return null;
-      } else if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      return null;
-    } else if (response.statusCode == 404) {
-      return null; // Asset not found
-    } else {
-      throw Exception('Failed to search asset');
+    final list = await searchAssets(query);
+    if (list.isNotEmpty) {
+      return {
+        'id': list.first.id,
+        'type': list.first.type,
+        'status': list.first.status,
+        'location': list.first.location,
+        'specs': list.first.specs,
+        'legacy_inv_code': list.first.legacyInvCode,
+        'sticker_status': list.first.stickerStatus,
+        'image_path': list.first.imagePath,
+        'note': list.first.note,
+      };
     }
+    return null;
   }
 
   // Get asset by ID (legacy method, kept for compatibility)

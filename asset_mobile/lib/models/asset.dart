@@ -52,6 +52,8 @@ class Asset {
       'status': status,
       'location': location,
       'specs': specs,
+      'legacy_inv_code': legacyInvCode,
+      'sticker_status': stickerStatus,
       'image_path': imagePath,
       'note': note,
     };
