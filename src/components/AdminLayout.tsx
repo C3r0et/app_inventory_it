@@ -16,7 +16,8 @@ import {
   X,
   QrCode,
   Folder,
-  Smartphone
+  Smartphone,
+  ScanLine
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -27,6 +28,7 @@ interface AdminLayoutProps {
 const menuItems = [
   { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/admin/assets', icon: Package, label: 'Assets' },
+  { path: '/admin/intake', icon: ScanLine, label: 'Penerimaan Aset' },
   { path: '/admin/desks', icon: Armchair, label: 'Desks' },
   { path: '/admin/users', icon: Users, label: 'Users' },
   { path: '/admin/batch', icon: Zap, label: 'Batch Operations' },

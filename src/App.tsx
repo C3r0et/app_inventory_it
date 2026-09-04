@@ -14,6 +14,7 @@ import { ReportsPage } from './pages/admin/ReportsPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { QRGeneratorPage } from './pages/admin/QRGeneratorPage';
 import { CategoriesPage } from './pages/admin/CategoriesPage';
+import { IntakePage } from './pages/admin/IntakePage';
 
 function App() {
   return (
@@ -55,6 +56,7 @@ function App() {
         <Route path="/admin/desks" element={<AdminLayout><DesksPage /></AdminLayout>} />
         <Route path="/admin/users" element={<AdminLayout><UsersPage /></AdminLayout>} />
         <Route path="/admin/batch" element={<AdminLayout><BatchOperationsPage /></AdminLayout>} />
+        <Route path="/admin/intake" element={<AdminLayout><IntakePage /></AdminLayout>} />
         <Route path="/admin/history" element={<AdminLayout><HistoryPage /></AdminLayout>} />
         <Route path="/admin/reports" element={<AdminLayout><ReportsPage /></AdminLayout>} />
         <Route path="/admin/settings" element={<AdminLayout><SettingsPage /></AdminLayout>} />

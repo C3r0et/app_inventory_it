@@ -8,6 +8,7 @@ import { AssetHistoryModal } from '../../components/AssetHistoryModal';
 import { BulkImportModal } from '../../components/BulkImportModal';
 import type { Asset } from '../../types';
 import { API_BASE_URL } from '../../services/apiClient';
+import toast from 'react-hot-toast';
 
 export const AssetsPage = () => {
   const navigate = useNavigate();
@@ -176,19 +177,23 @@ export const AssetsPage = () => {
       supplier: formData.get('supplier') as string || null,
       warranty_date: formData.get('warranty_date') as string || null,
       note: formData.get('note') as string || '',
+      image_path: formData.get('image_path') as string || null,
+      legacy_inv_code: formData.get('legacy_inv_code') as string || null,
     };
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/assets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Source': 'web' },
         body: JSON.stringify(newAsset),
       });
-      if (!response.ok) throw new Error('Failed to create asset');
+      if (!response.ok) throw new Error('Gagal membuat aset baru');
       await fetchAssets();
       setShowCreateModal(false);
+      toast.success(`Aset ${newAsset.id} berhasil ditambahkan!`);
     } catch (error) {
       console.error('Error creating asset:', error);
+      toast.error('Gagal menambahkan aset baru');
     }
   };
 
@@ -212,20 +217,24 @@ export const AssetsPage = () => {
       supplier: formData.get('supplier') as string || null,
       warranty_date: formData.get('warranty_date') as string || null,
       note: formData.get('note') as string || '',
+      image_path: formData.get('image_path') as string || selectedAsset.image_path || null,
+      legacy_inv_code: formData.get('legacy_inv_code') as string || selectedAsset.legacy_inv_code || null,
     };
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/assets/${selectedAsset.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Source': 'web' },
         body: JSON.stringify(updatedAsset),
       });
-      if (!response.ok) throw new Error('Failed to update asset');
+      if (!response.ok) throw new Error('Gagal memperbarui aset');
       await fetchAssets();
       setShowEditModal(false);
       setSelectedAsset(null);
+      toast.success(`Perubahan aset ${selectedAsset.id} berhasil disimpan!`);
     } catch (error) {
       console.error('Error updating asset:', error);
+      toast.error('Gagal memperbarui data aset');
     }
   };
 
