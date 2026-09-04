@@ -153,9 +153,13 @@ func main() {
 	r.HandleFunc("/api/analytics/bast-stats", getBastStats).Methods("GET", "OPTIONS")
 
 	// Health check
-	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	healthHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-	}).Methods("GET")
+	}
+	r.HandleFunc("/health", healthHandler).Methods("GET")
+	r.HandleFunc("/api/health", healthHandler).Methods("GET", "OPTIONS")
+
 
 	// Ensure uploads directory exists
 	if err := os.MkdirAll("./uploads", os.ModePerm); err != nil {

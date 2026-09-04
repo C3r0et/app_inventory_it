@@ -280,13 +280,11 @@ class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAlive
                           isTesting = true;
                           testResult = null;
                         });
-                        final ok = await ApiService.testConnection(text);
+                        final result = await ApiService.testConnectionDetailed(text);
                         setDialogState(() {
                           isTesting = false;
-                          testSuccess = ok;
-                          testResult = ok
-                              ? 'Terhubung! (HTTP 200 OK)'
-                              : 'Gagal terhubung. Periksa domain/IP atau pastikan server aktif.';
+                          testSuccess = result['success'] == true;
+                          testResult = result['message'] ?? (testSuccess == true ? 'Terhubung! (HTTP 200 OK)' : 'Gagal terhubung.');
                         });
                       },
                       icon: isTesting 

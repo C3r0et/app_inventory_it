@@ -5,18 +5,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/asset.dart';
 
 class ApiService {
-  static String _currentBaseUrl = 'http://199.166.25.5:8080/api';
+  static String _currentBaseUrl = 'https://asset.sahabatsakinah.id/api';
 
   /// Normalizes IP or Domain input into a valid backend API URL.
   /// Supports:
   /// - Pure IP: 199.166.25.5 -> http://199.166.25.5:8080/api
   /// - IP with port: 199.166.25.5:9000 -> http://199.166.25.5:9000/api
-  /// - Domain: backend.pt-sss.co.id -> https://backend.pt-sss.co.id/api
+  /// - Domain: asset.sahabatsakinah.id -> https://asset.sahabatsakinah.id/api
   /// - Domain with http/port: http://api.domain.com:8080 -> http://api.domain.com:8080/api
-  /// - Full URL: https://api.mycompany.com/api -> https://api.mycompany.com/api
+  /// - Full URL: https://asset.sahabatsakinah.id/api -> https://asset.sahabatsakinah.id/api
   static String formatBaseUrl(String input) {
     String clean = input.trim();
-    if (clean.isEmpty) return 'http://199.166.25.5:8080/api';
+    if (clean.isEmpty) return 'https://asset.sahabatsakinah.id/api';
 
     while (clean.endsWith('/')) {
       clean = clean.substring(0, clean.length - 1);
@@ -101,7 +101,7 @@ class ApiService {
   // Get all assets
   static Future<List<Asset>> getAssets() async {
     final response = await http.get(Uri.parse('$baseUrl/assets'))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 30));
     
     if (response.statusCode == 200) {
       List<dynamic> jsonList = json.decode(response.body);
@@ -269,20 +269,53 @@ class ApiService {
     }
   }
 
-  // Health check
+  // Health check & Connection test
   Future<bool> checkConnection([String? testAddress]) => testConnection(testAddress);
 
-  static Future<bool> testConnection([String? testAddress]) async {
+  static Future<Map<String, dynamic>> testConnectionDetailed([String? testAddress]) async {
+    final url = (testAddress != null && testAddress.trim().isNotEmpty)
+        ? formatBaseUrl(testAddress)
+        : baseUrl;
     try {
-      final url = (testAddress != null && testAddress.trim().isNotEmpty)
-          ? formatBaseUrl(testAddress)
-          : baseUrl;
+      // 1. First try /stats (very lightweight, ~124 bytes instead of 2.1MB asset list)
+      try {
+        final res = await http.get(Uri.parse('$url/stats')).timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200) {
+          return {'success': true, 'message': 'Terhubung ke server! (HTTP 200 OK)'};
+        }
+      } catch (_) {}
+
+      // 2. Try /health
+      try {
+        final res = await http.get(Uri.parse('$url/health')).timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200) {
+          return {'success': true, 'message': 'Terhubung ke server! (HTTP 200 OK)'};
+        }
+      } catch (_) {}
+
+      // 3. Fallback to /assets
       final response = await http.get(Uri.parse('$url/assets'))
-          .timeout(const Duration(seconds: 5));
-      return response.statusCode == 200;
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': 'Terhubung ke server! (HTTP 200 OK)'};
+      }
+      return {'success': false, 'message': 'Server merespons status code: ${response.statusCode}'};
     } catch (e) {
-      return false;
+      String msg = e.toString();
+      if (msg.contains('TimeoutException')) {
+        msg = 'Waktu koneksi habis (timeout). Sinyal seluler mungkin lambat.';
+      } else if (msg.contains('HandshakeException')) {
+        msg = 'Gagal verifikasi sertifikat SSL.';
+      } else if (msg.contains('SocketException')) {
+        msg = 'Gagal menghubungi server. Periksa koneksi internet Anda.';
+      }
+      return {'success': false, 'message': msg};
     }
+  }
+
+  static Future<bool> testConnection([String? testAddress]) async {
+    final res = await testConnectionDetailed(testAddress);
+    return res['success'] == true;
   }
 
   // Log Activity (Manual)
