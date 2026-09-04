@@ -144,15 +144,20 @@ class DatabaseService {
     return List.generate(maps.length, (i) => Asset.fromMap(maps[i]));
   }
 
-  Future<void> markAsSynced(String id) async {
+  Future<void> markAsSynced(String id, [String? serverImagePath]) async {
     final db = await database;
+    final Map<String, dynamic> updateValues = {'is_synced': 1};
+    if (serverImagePath != null && serverImagePath.isNotEmpty) {
+      updateValues['image_path'] = serverImagePath;
+    }
     await db.update(
       'assets',
-      {'is_synced': 1},
+      updateValues,
       where: 'id = ?',
       whereArgs: [id],
     );
   }
+
   Future<Map<String, int>> getAssetCounts() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.rawQuery('''

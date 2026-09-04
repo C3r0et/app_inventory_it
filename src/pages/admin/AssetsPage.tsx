@@ -46,6 +46,18 @@ export const AssetsPage = () => {
     fetchAssets();
   }, [isAuthenticated, navigate, fetchAssets]);
 
+  // Auto-refresh asset list in real-time when SSE event arrives from mobile app
+  useEffect(() => {
+    const handleActivity = () => {
+      fetchAssets();
+    };
+    window.addEventListener('asset-activity-updated', handleActivity);
+    return () => {
+      window.removeEventListener('asset-activity-updated', handleActivity);
+    };
+  }, [fetchAssets]);
+
+
   const normalizeCategory = (t: string) => {
     const s = (t || '').toUpperCase().trim();
     if (s === 'PC' || s === 'CPU') return 'PC';

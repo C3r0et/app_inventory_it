@@ -169,6 +169,9 @@ func main() {
 	r.HandleFunc("/health", healthHandler).Methods("GET")
 	r.HandleFunc("/api/health", healthHandler).Methods("GET", "OPTIONS")
 
+	// Real-time Server-Sent Events (SSE) stream for live dashboard notifications
+	r.HandleFunc("/api/sse", sseBroker.handleSSE).Methods("GET", "OPTIONS")
+
 
 	// Ensure uploads directory exists
 	if err := os.MkdirAll("./uploads", os.ModePerm); err != nil {

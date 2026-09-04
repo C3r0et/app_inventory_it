@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../services/database_service.dart';
 import '../services/api_service.dart';
+import '../services/sync_service.dart';
 import '../services/theme_provider.dart';
 import '../models/asset.dart';
 import 'simple_scanner_screen.dart';
@@ -401,30 +402,77 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
     final apiService = context.read<ApiService>();
 
     try {
-      // Save to local DB first (upsert)
+      bool syncedOnline = false;
+      String? serverImagePath;
+
+      // Check if online and directly push to server
+      final isEditMode = widget.asset != null && widget.asset!.id.isNotEmpty;
+
       try {
-        await dbService.insertAsset(asset);
-      } catch (_) {
-        await dbService.updateAsset(asset);
+        Asset syncedAsset;
+        if (isEditMode) {
+          syncedAsset = await apiService.updateAsset(asset);
+        } else {
+          try {
+            syncedAsset = await apiService.createAsset(asset);
+          } catch (_) {
+            syncedAsset = await apiService.updateAsset(asset);
+          }
+        }
+        syncedOnline = true;
+        serverImagePath = syncedAsset.imagePath;
+      } catch (e) {
+        print('Direct online sync failed, saving offline to local DB: $e');
+        syncedOnline = false;
       }
 
-      // Try to sync to API (try createAsset first, fallback to updateAsset)
+      // Save to local SQLite database
+      final localAsset = Asset(
+        id: asset.id,
+        type: asset.type,
+        status: asset.status,
+        location: asset.location,
+        specs: asset.specs,
+        legacyInvCode: asset.legacyInvCode,
+        stickerStatus: asset.stickerStatus,
+        imagePath: syncedOnline && serverImagePath != null ? serverImagePath : asset.imagePath,
+        note: asset.note,
+        isSynced: syncedOnline,
+      );
+
       try {
-        try {
-          await apiService.createAsset(asset);
-        } catch (_) {
-          await apiService.updateAsset(asset);
-        }
-        await dbService.markAsSynced(asset.id);
-      } catch (e) {
-        print('Failed to sync API: $e');
+        await dbService.insertAsset(localAsset);
+      } catch (_) {
+        await dbService.updateAsset(localAsset);
+      }
+
+      if (syncedOnline) {
+        await dbService.markAsSynced(asset.id, serverImagePath);
+      } else {
+        // Trigger background auto-sync to retry automatically when online
+        SyncService.instance.syncPending();
       }
 
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✓ Data aset berhasil disimpan'),
-          backgroundColor: Color(0xFF10B981),
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(syncedOnline ? Icons.cloud_done_rounded : Icons.offline_pin_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  syncedOnline
+                      ? (isEditMode ? '✓ Data berhasil diperbarui & tersinkron ke server' : '✓ Aset baru berhasil disimpan & tersinkron ke server')
+                      : '📱 Mode Offline: Tersimpan di HP. Akan otomatis tersinkron saat online',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: syncedOnline ? const Color(0xFF10B981) : const Color(0xFF2563EB),
+          duration: const Duration(seconds: 4),
         ),
       );
 
@@ -442,6 +490,7 @@ class _AssetFormScreenState extends State<AssetFormScreen> {
         SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444)),
       );
     }
+
   }
 
   Future<void> _deleteAsset() async {

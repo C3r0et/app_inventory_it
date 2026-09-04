@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { useSSE } from '../services/useSSE';
 import { 
   LayoutDashboard, 
   Package, 
@@ -41,6 +42,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
   const location = useLocation();
   const { username, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { isConnected } = useSSE();
 
   const handleLogout = () => {
     logout();
@@ -54,9 +56,17 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
         {/* Logo & Toggle */}
         <div className="p-4 border-b border-slate-700 flex items-center justify-between">
           {sidebarOpen && (
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Asset Manager
-            </h1>
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Asset Manager
+              </h1>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  {isConnected ? 'Real-time SSE Aktif' : 'Menghubungkan...'}
+                </span>
+              </div>
+            </div>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}

@@ -30,14 +30,29 @@ type LogActivityRequest struct {
 	Source     string `json:"source"`
 }
 
-// Helper function to log activity
+// Helper function to log activity and broadcast via SSE
 func logActivity(user, action, entityType, entityID, details, source string) error {
 	_, err := db.Exec(`
 		INSERT INTO audit_logs (user, action, entity_type, entity_id, details, source)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, user, action, entityType, entityID, details, source)
+
+	// Broadcast real-time activity to connected dashboards via SSE
+	if sseBroker != nil {
+		sseBroker.broadcastActivity("activity", map[string]interface{}{
+			"timestamp":   time.Now().Format("2006-01-02 15:04:05"),
+			"user":        user,
+			"action":      action,
+			"entity_type": entityType,
+			"entity_id":   entityID,
+			"details":     details,
+			"source":      source,
+		})
+	}
+
 	return err
 }
+
 
 // GET /api/history - Fetch audit logs with pagination
 func getHistory(w http.ResponseWriter, r *http.Request) {
