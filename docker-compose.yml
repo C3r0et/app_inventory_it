@@ -1,0 +1,24 @@
+services:
+  app-inventory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app-inventory
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - DB_DSN=userdb:sahabat25*@tcp(10.9.9.110:3306)/asset_inventory?parseTime=true
+      - TZ=Asia/Jakarta
+      # Jika Nginx reverse-proxy Anda menggunakan automated proxy (seperti jwilder/nginx-proxy),
+      # Anda bisa mengaktifkan baris di bawah ini:
+      # - VIRTUAL_HOST=inventory.sahabatsakinah.id
+      # - VIRTUAL_PORT=8080
+    volumes:
+      # Folder uploads untuk foto bukti aset dan APK mobile agar tetap tersimpan aman di host server
+      - ./uploads:/app/uploads
+    networks:
+      - proxy-tier
+
+networks:
+  proxy-tier:
+    external: true

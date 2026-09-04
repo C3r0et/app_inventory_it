@@ -1,0 +1,13 @@
+node_modules
+asset_mobile
+.git
+.gemini
+.vscode
+.idea
+dist
+build
+backend/*.exe
+backend/inventory_backend
+*.xlsx
+*.log
+scratch
