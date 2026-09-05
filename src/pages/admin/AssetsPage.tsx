@@ -219,6 +219,7 @@ export const AssetsPage = () => {
       note: formData.get('note') as string || '',
       image_path: formData.get('image_path') as string || selectedAsset.image_path || null,
       legacy_inv_code: formData.get('legacy_inv_code') as string || selectedAsset.legacy_inv_code || null,
+      sticker_status: formData.get('sticker_status') as string || selectedAsset.sticker_status || 'STICKERED',
     };
 
     try {

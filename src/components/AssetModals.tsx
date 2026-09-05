@@ -5,7 +5,10 @@ import type { Asset } from '../types';
 import { API_BASE_URL } from '../services/apiClient';
 import toast from 'react-hot-toast';
 
-const BRANDS = ['Logitech', 'Votre', 'HP', 'Lenovo', 'Dell', 'Asus', 'LG', 'Simbadda', 'Lainnya'];
+const POPULAR_BRANDS = [
+  'Logitech', 'Votre', 'HP', 'Lenovo', 'Dell', 'Asus', 'LG', 'Simbadda',
+  'Advance', 'A4Tech', 'Rexus', 'Fantech', 'Samsung', 'Acer', 'Apple', 'Canon', 'Epson'
+];
 
 const ASSET_TYPES = [
   { id: 'PC', label: 'PC / CPU' },
@@ -15,6 +18,50 @@ const ASSET_TYPES = [
   { id: 'MOUSE', label: 'Mouse' },
   { id: 'HEADSET', label: 'Headset' },
   { id: 'LAINNYA', label: 'Lainnya' },
+];
+
+const TYPE_LABELS: Record<string, string> = {
+  PC: 'CPU',
+  LAPTOP: 'Laptop',
+  MONITOR: 'Monitor',
+  KEYBOARD: 'Keyboard',
+  MOUSE: 'Mouse',
+  HEADSET: 'Headset',
+  LAINNYA: 'Lainnya',
+};
+
+export const resolveTypeKey = (type?: string, id?: string): string => {
+  const t = (type || '').trim().toUpperCase();
+  const rawId = (id || '').trim().toUpperCase();
+
+  if (t === 'HEADSET' || t === 'HD' || t === 'HS' || t.includes('HEADSET') || rawId.startsWith('HD-') || rawId.startsWith('HS-') || rawId.startsWith('HD/')) {
+    return 'HEADSET';
+  }
+  if (t === 'KEYBOARD' || t === 'KB' || t.includes('KEYBOARD') || rawId.startsWith('KB-') || rawId.startsWith('KB/')) {
+    return 'KEYBOARD';
+  }
+  if (t === 'MOUSE' || t === 'MS' || t.includes('MOUSE') || rawId.startsWith('MS-') || rawId.startsWith('MS/')) {
+    return 'MOUSE';
+  }
+  if (t === 'MONITOR' || t === 'MN' || t.includes('MONITOR') || rawId.startsWith('MN-') || rawId.startsWith('MN/')) {
+    return 'MONITOR';
+  }
+  if (t === 'LAPTOP' || t === 'LAP' || t.includes('LAPTOP') || rawId.startsWith('LAP-') || rawId.startsWith('LAP/')) {
+    return 'LAPTOP';
+  }
+  if (t === 'PC' || t === 'CPU' || t.includes('CPU') || t.includes('PC') || rawId.startsWith('PC-') || rawId.startsWith('CPU-') || rawId.startsWith('PC/')) {
+    return 'PC';
+  }
+  return 'LAINNYA';
+};
+
+const STANDARD_LOCATIONS = [
+  'Ruang IT',
+  'Collection Floor Lantai 2',
+  'Collection Floor Lantai 3',
+  'Gudang IT',
+  'Ruang Server',
+  'Ruang Management',
 ];
 
 const REPAIR_PRESETS = [
@@ -47,7 +94,7 @@ const AssetFormModal = ({
 
   // Primary fields
   const [assetType, setAssetType] = useState<string>('PC');
-  const [brand, setBrand] = useState<string>('Logitech');
+  const [brand, setBrand] = useState<string>('');
   const [customBrand, setCustomBrand] = useState<string>('');
   const [status, setStatus] = useState<string>('AVAILABLE');
   const [locationType, setLocationType] = useState<string>('Ruang IT');
@@ -64,6 +111,7 @@ const AssetFormModal = ({
   const [serialNumber, setSerialNumber] = useState<string>('');
   const [warrantyDate, setWarrantyDate] = useState<string>('');
   const [legacyInvCode, setLegacyInvCode] = useState<string>('');
+  const [stickerStatus, setStickerStatus] = useState<string>('STICKERED');
 
   useEffect(() => {
     if (show) {
@@ -73,47 +121,86 @@ const AssetFormModal = ({
 
   useEffect(() => {
     if (asset) {
-      setAssetType(asset.type || 'PC');
+      setAssetType(resolveTypeKey(asset.type, asset.id));
       setStatus(asset.status || 'AVAILABLE');
       setNote(asset.note || '');
       setSerialNumber(asset.serial_number || '');
       setWarrantyDate(asset.warranty_date ? asset.warranty_date.substring(0, 10) : '');
       setLegacyInvCode(asset.legacy_inv_code || '');
+      setStickerStatus(asset.sticker_status || 'STICKERED');
       setSelectedCategory(asset.category_id || null);
 
-      // Parse Location
-      if (asset.location) {
-        if (asset.location.startsWith('Floor')) {
-          const parts = asset.location.split(' - Meja ');
-          setLocationType(parts[0]);
-          setDeskNumber(parts.length > 1 ? parts[1] : '');
+      // Auto expand advanced settings if any technical field exists
+      const hasAdvanced = Boolean(
+        asset.serial_number ||
+        asset.warranty_date ||
+        asset.legacy_inv_code ||
+        asset.category_id
+      );
+      setShowAdvanced(hasAdvanced);
+
+      // Parse Location & Desk
+      const rawLoc = (asset.location || '').trim();
+      let parsedLoc = 'Ruang IT';
+      let parsedDesk = '';
+
+      if (rawLoc) {
+        if (rawLoc.includes(' - Meja ')) {
+          const parts = rawLoc.split(' - Meja ');
+          parsedLoc = parts[0].trim();
+          parsedDesk = parts.slice(1).join(' - Meja ').trim();
+        } else if (rawLoc.includes('Meja ')) {
+          const parts = rawLoc.split(/Meja\s*/i);
+          parsedLoc = parts[0].replace(/[-,\s]+$/, '').trim();
+          parsedDesk = parts.slice(1).join('Meja ').trim();
         } else {
-          setLocationType(asset.location);
-          setDeskNumber('');
+          parsedLoc = rawLoc;
+          parsedDesk = '';
         }
-      } else {
-        setLocationType('Ruang IT');
-        setDeskNumber('');
+
+        // Normalize floor names
+        if (parsedLoc === 'Floor Lt2' || parsedLoc === 'Lantai 2' || parsedLoc === 'Lt 2') {
+          parsedLoc = 'Collection Floor Lantai 2';
+        } else if (parsedLoc === 'Floor Lt3' || parsedLoc === 'Lantai 3' || parsedLoc === 'Lt 3') {
+          parsedLoc = 'Collection Floor Lantai 3';
+        }
       }
+      setLocationType(parsedLoc);
+      setDeskNumber(parsedDesk);
 
       // Parse Brand & Specs
-      const dbSpecs = asset.specs || '';
+      const dbSpecs = (asset.specs || '').trim();
+      let extractedBrand = '';
+      let extractedCustom = '';
+      let remainingSpecs = dbSpecs;
+
       if (dbSpecs.startsWith('Merk: ')) {
         const parts = dbSpecs.split('|');
-        const possibleBrand = parts[0].replace('Merk: ', '').trim();
-        if (BRANDS.includes(possibleBrand)) {
-          setBrand(possibleBrand);
-          setCustomBrand('');
-        } else {
-          setBrand('Lainnya');
-          setCustomBrand(possibleBrand);
+        const rawBrand = parts[0].replace('Merk: ', '').trim();
+        const matched = POPULAR_BRANDS.find(b => b.toLowerCase() === rawBrand.toLowerCase());
+        if (matched) {
+          extractedBrand = matched;
+        } else if (rawBrand) {
+          extractedBrand = 'Lainnya';
+          extractedCustom = rawBrand;
         }
-        setAdditionalSpecs(parts.length > 1 ? parts.slice(1).join('|').trim() : '');
+        remainingSpecs = parts.length > 1 ? parts.slice(1).join('|').trim() : '';
       } else {
-        setBrand('Logitech');
-        setCustomBrand('');
-        setAdditionalSpecs(dbSpecs);
+        if (!dbSpecs.startsWith('Source: GA Master')) {
+          const matched = POPULAR_BRANDS.find(b => {
+            const regex = new RegExp(`\\b${b}\\b`, 'i');
+            return regex.test(dbSpecs);
+          });
+          if (matched) {
+            extractedBrand = matched;
+          }
+        }
+        remainingSpecs = dbSpecs;
       }
+
+      setBrand(extractedBrand);
+      setCustomBrand(extractedCustom);
+      setAdditionalSpecs(remainingSpecs);
 
       // Parse Images
       if (asset.image_path) {
@@ -124,7 +211,7 @@ const AssetFormModal = ({
     } else {
       // Defaults for Create Mode
       setAssetType('PC');
-      setBrand('Logitech');
+      setBrand('');
       setCustomBrand('');
       setStatus('AVAILABLE');
       setLocationType('Ruang IT');
@@ -135,7 +222,9 @@ const AssetFormModal = ({
       setSerialNumber('');
       setWarrantyDate('');
       setLegacyInvCode('');
+      setStickerStatus('STICKERED');
       setSelectedCategory(null);
+      setShowAdvanced(false);
     }
   }, [asset, show]);
 
@@ -178,16 +267,24 @@ const AssetFormModal = ({
   if (!show) return null;
 
   // Compute merged location & specs
-  const computedLocation = locationType === 'Ruang IT'
-    ? locationType
-    : deskNumber.trim()
+  const computedLocation = deskNumber.trim()
     ? `${locationType} - Meja ${deskNumber.trim()}`
     : locationType;
 
-  const finalBrand = brand === 'Lainnya' && customBrand.trim() ? customBrand.trim() : brand;
-  const computedSpecs = additionalSpecs.trim()
-    ? `Merk: ${finalBrand} | ${additionalSpecs.trim()}`
-    : `Merk: ${finalBrand}`;
+  const finalBrand = brand === 'Lainnya' ? customBrand.trim() : brand;
+  let computedSpecs = '';
+  if (finalBrand) {
+    computedSpecs = additionalSpecs.trim()
+      ? `Merk: ${finalBrand} | ${additionalSpecs.trim()}`
+      : `Merk: ${finalBrand}`;
+  } else {
+    computedSpecs = additionalSpecs.trim();
+  }
+
+  // Type: if asset existed and matches normalized category, keep original asset.type (e.g. 'Headset', 'CPU'), else use TYPE_LABELS
+  const computedType = (asset && resolveTypeKey(asset.type, asset.id) === assetType)
+    ? (asset.type || TYPE_LABELS[assetType] || assetType)
+    : (TYPE_LABELS[assetType] || assetType);
 
   const computedImagePath = imagePaths.join(',');
 
@@ -197,15 +294,20 @@ const AssetFormModal = ({
         {/* Header */}
         <div className="flex justify-between items-center border-b border-slate-700 pb-4">
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="text-xl font-extrabold text-white tracking-tight">{title}</h3>
               {asset?.id && (
-                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+                <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-950 text-blue-300 border border-blue-700/80 shadow-sm">
                   {asset.id}
                 </span>
               )}
+              {asset?.legacy_inv_code && (
+                <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-950/80 text-emerald-300 border border-emerald-700/80 shadow-sm flex items-center gap-1" title="Kode Inventaris GA / Stiker">
+                  🏷️ {asset.legacy_inv_code}
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-400 mt-1">
               Kelola data aset, status, lokasi, merk, dan dokumentasi foto fisik.
             </p>
           </div>
@@ -219,7 +321,7 @@ const AssetFormModal = ({
 
         <form onSubmit={onSubmit} className="space-y-5">
           {/* Hidden inputs to pass data seamlessly to existing onSubmit handler */}
-          <input type="hidden" name="type" value={assetType} />
+          <input type="hidden" name="type" value={computedType} />
           <input type="hidden" name="status" value={status} />
           <input type="hidden" name="location" value={computedLocation} />
           <input type="hidden" name="specs" value={computedSpecs} />
@@ -228,6 +330,7 @@ const AssetFormModal = ({
           <input type="hidden" name="serial_number" value={serialNumber} />
           <input type="hidden" name="warranty_date" value={warrantyDate} />
           <input type="hidden" name="legacy_inv_code" value={legacyInvCode} />
+          <input type="hidden" name="sticker_status" value={stickerStatus} />
           <input type="hidden" name="category_id" value={selectedCategory || ''} />
 
           {/* Asset ID Field (Only if Creating New) */}
@@ -277,12 +380,17 @@ const AssetFormModal = ({
               </label>
               <select
                 value={brand}
-                onChange={(e) => setBrand(e.target.value)}
+                onChange={(e) => {
+                  setBrand(e.target.value);
+                  if (e.target.value !== 'Lainnya') setCustomBrand('');
+                }}
                 className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition"
               >
-                {BRANDS.map((b) => (
+                <option value="">-- Belum Ada Merk / Tidak Ditentukan --</option>
+                {POPULAR_BRANDS.map((b) => (
                   <option key={b} value={b}>{b}</option>
                 ))}
+                <option value="Lainnya">Lainnya (Tulis Merk Khusus)</option>
               </select>
             </div>
 
@@ -354,23 +462,25 @@ const AssetFormModal = ({
                 onChange={(e) => setLocationType(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition"
               >
-                <option value="Ruang IT">Ruang IT</option>
-                <option value="Floor Lt2">Floor Lt2 (Lantai 2)</option>
-                <option value="Floor Lt3">Floor Lt3 (Lantai 3)</option>
+                {!STANDARD_LOCATIONS.includes(locationType) && locationType && (
+                  <option value={locationType}>{locationType} (Lokasi Saat Ini)</option>
+                )}
+                {STANDARD_LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>{loc}</option>
+                ))}
               </select>
             </div>
 
-            {(locationType === 'Floor Lt2' || locationType === 'Floor Lt3') && (
+            {(locationType.toLowerCase().includes('floor') || locationType.toLowerCase().includes('lantai') || deskNumber) && (
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  Nomor Meja Karyawan *
+                  Nomor Meja Karyawan (Opsional)
                 </label>
                 <input
                   type="text"
                   value={deskNumber}
                   onChange={(e) => setDeskNumber(e.target.value)}
                   placeholder="Contoh: 12 atau 05A"
-                  required
                   className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 transition"
                 />
               </div>
