@@ -22,8 +22,15 @@ import {
   X,
   History,
   Boxes,
-  HelpCircle
+  HelpCircle,
+  Camera,
+  Image as ImageIcon,
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
+import { scanStickerWithMistral } from '../../services/mistralVisionService';
 
 interface ScannedSessionItem {
   asset: Asset;
@@ -47,6 +54,18 @@ export const IntakePage = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [scannedItems, setScannedItems] = useState<ScannedSessionItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Camera & AI OCR Vision state
+  const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
+  const [isOcrProcessing, setIsOcrProcessing] = useState<boolean>(false);
+  const [ocrStatusText, setOcrStatusText] = useState<string | null>(null);
+  const [ocrCandidates, setOcrCandidates] = useState<string[]>([]);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileUploadRef = useRef<HTMLInputElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   // Multi-match dialog state
   const [ambiguousMatches, setAmbiguousMatches] = useState<Asset[] | null>(null);
@@ -133,10 +152,9 @@ export const IntakePage = () => {
     return raw.trim().replace(/^[\s/]+|[\s/]+$/g, '');
   };
 
-  const handleScanSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const query = cleanQuery(scanInput);
-    if (!query || isProcessing) return;
+  const processQuery = async (rawQuery: string): Promise<boolean> => {
+    const query = cleanQuery(rawQuery);
+    if (!query || isProcessing) return false;
 
     setIsProcessing(true);
     try {
@@ -146,7 +164,7 @@ export const IntakePage = () => {
         if (response.status === 404) {
           playSound('error');
           setUnregisteredCode(query);
-          return;
+          return false;
         }
         throw new Error('Gagal mencari aset di server');
       }
@@ -158,23 +176,164 @@ export const IntakePage = () => {
         // Single match found - directly check in!
         await checkInAsset(assetList[0]);
         setScanInput('');
+        return true;
       } else if (assetList.length > 1) {
         // Multiple matches found (e.g. MS-1126 and KB-1126)
         playSound('warning');
         setAmbiguousQuery(query);
         setAmbiguousMatches(assetList);
+        return false;
       } else {
         // No match found
         playSound('error');
         setUnregisteredCode(query);
+        return false;
       }
     } catch (err) {
       console.error('Scan check error:', err);
       toast.error('Gagal memproses scan. Periksa koneksi jaringan.');
       playSound('error');
+      return false;
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleScanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await processQuery(scanInput);
+  };
+
+  // Camera OCR Vision methods
+  const startCamera = async () => {
+    setCameraError(null);
+    setOcrStatusText(null);
+    setOcrCandidates([]);
+    setIsCameraOpen(true);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
+      mediaStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.error('Webcam access error:', err);
+      setCameraError('Gagal mengakses kamera. Pastikan browser diberikan izin akses webcam/kamera.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    setIsCameraOpen(false);
+    setOcrStatusText(null);
+    setOcrCandidates([]);
+  };
+
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && mediaStreamRef.current) {
+      videoRef.current.srcObject = mediaStreamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isCameraOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+  const captureAndScan = async () => {
+    if (!videoRef.current || isOcrProcessing) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current || document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+    setIsOcrProcessing(true);
+    setOcrStatusText('AI sedang membaca tulisan tangan spidol...');
+    setOcrCandidates([]);
+
+    try {
+      const res = await scanStickerWithMistral(dataUrl);
+      if (res.isSuccess && res.assetId) {
+        setOcrStatusText(`Terdeteksi: ${res.assetId}`);
+        setOcrCandidates(res.candidates || []);
+        setScanInput(res.assetId);
+
+        const success = await processQuery(res.assetId);
+        if (success) {
+          toast.success(`OCR berhasil membaca: ${res.assetId}`);
+          stopCamera();
+        }
+      } else if (res.candidates && res.candidates.length > 0) {
+        setOcrStatusText('Pilih salah satu kandidat nomor yang terdeteksi:');
+        setOcrCandidates(res.candidates);
+      } else {
+        setOcrStatusText(null);
+        toast.error('Tulisan spidol tidak terdeteksi jelas. Coba dekatkan kamera atau atur pencahayaan.');
+        playSound('warning');
+      }
+    } catch (err) {
+      console.error('OCR Error:', err);
+      toast.error('Gagal memproses OCR.');
+    } finally {
+      setIsOcrProcessing(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setIsOcrProcessing(true);
+      const toastId = toast.loading('AI sedang membaca foto stiker spidol...');
+
+      try {
+        const res = await scanStickerWithMistral(dataUrl);
+        toast.dismiss(toastId);
+
+        if (res.isSuccess && res.assetId) {
+          setScanInput(res.assetId);
+          toast.success(`OCR berhasil membaca: ${res.assetId}`);
+          await processQuery(res.assetId);
+        } else if (res.candidates && res.candidates.length > 0) {
+          setAmbiguousQuery(res.candidates[0]);
+          await processQuery(res.candidates[0]);
+        } else {
+          toast.error('Tulisan spidol tidak terdeteksi dari foto yang diunggah.');
+        }
+      } catch (err) {
+        toast.dismiss(toastId);
+        console.error('OCR Upload Error:', err);
+        toast.error('Gagal memproses OCR foto.');
+      } finally {
+        setIsOcrProcessing(false);
+        if (fileUploadRef.current) fileUploadRef.current.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const checkInAsset = async (asset: Asset) => {
@@ -435,19 +594,19 @@ export const IntakePage = () => {
         </div>
 
         <form onSubmit={handleScanSubmit} className="relative z-10 max-w-3xl mx-auto text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            Siap Scan Barcode / Ketik Manual Nomor Aset
+            Mendukung Tulisan Spidol (Ketik &amp; Kamera OCR) + Scanner Barcode USB
           </div>
 
           <h2 className="text-xl md:text-2xl font-extrabold text-white">
-            Arahkan Scanner Barcode atau Ketik Nomor Aset
+            Scan Stiker Tulisan Spidol, Barcode, atau Ketik Nomor Aset
           </h2>
-          <p className="text-xs md:text-sm text-slate-300 max-w-xl mx-auto">
-            Colok scanner barcode USB ke laptop/PC dan tembak stiker aset, atau ketik langsung angkanya (misal <span className="font-mono text-cyan-300 bg-slate-800/80 px-1.5 py-0.5 rounded">1126</span> atau <span className="font-mono text-cyan-300 bg-slate-800/80 px-1.5 py-0.5 rounded">KB-1126</span>) lalu tekan <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-xs text-slate-200">Enter</kbd>.
+          <p className="text-xs md:text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">
+            Jika stiker masih bertuliskan spidol, Anda bisa <strong className="text-white">Ketik Langsung Angkanya</strong> (misal <span className="font-mono text-cyan-300 bg-slate-800/80 px-1.5 py-0.5 rounded font-bold">1126</span> lalu tekan <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-xs text-slate-200 font-mono">Enter</kbd>), gunakan <strong className="text-emerald-300">Kamera OCR AI</strong> di bawah, atau tembak dengan barcode scanner USB.
           </p>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <input
                 ref={inputRef}
@@ -455,7 +614,7 @@ export const IntakePage = () => {
                 value={scanInput}
                 onChange={(e) => setScanInput(e.target.value)}
                 disabled={isProcessing}
-                placeholder="Scan barcode di sini... (contoh: MS-1126 atau cukup 1126)"
+                placeholder="Ketik angka spidol (misal: 1126) atau scan barcode di sini..."
                 className="w-full pl-5 pr-12 py-4 bg-slate-900/90 border-2 border-blue-500/60 rounded-2xl text-lg font-mono text-white placeholder-slate-500 shadow-inner focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/20 transition"
                 autoFocus
               />
@@ -472,11 +631,40 @@ export const IntakePage = () => {
             <button
               type="submit"
               disabled={isProcessing || !scanInput.trim()}
-              className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/30 flex items-center gap-2 transition"
+              className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition"
             >
-              {isProcessing ? 'Memproses...' : 'Scan Masuk'}
+              {isProcessing ? 'Memproses...' : 'Catat Masuk'}
               <ArrowRight size={18} />
             </button>
+          </div>
+
+          {/* Quick Action Badges & OCR Scanner Controls */}
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={startCamera}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-900/40 flex items-center gap-2 transition hover:scale-[1.02]"
+            >
+              <Camera size={16} />
+              📷 Buka Kamera OCR (Scan Tulisan Spidol)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fileUploadRef.current?.click()}
+              disabled={isOcrProcessing}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-semibold flex items-center gap-2 transition hover:border-slate-500"
+            >
+              <ImageIcon size={16} className="text-cyan-400" />
+              📁 Upload Foto Stiker Spidol
+            </button>
+            <input
+              ref={fileUploadRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
           </div>
         </form>
       </div>
@@ -757,6 +945,139 @@ export const IntakePage = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Camera OCR Vision Modal */}
+      {isCameraOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-slate-800 rounded-3xl p-5 sm:p-6 max-w-xl w-full border border-emerald-500/50 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+                  <Camera size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Kamera OCR AI (Tulisan Spidol)
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Mistral Vision
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Arahkan kamera ke stiker bertuliskan nomor spidol di fisik aset.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="p-1.5 hover:bg-slate-700 rounded-xl text-slate-400 hover:text-white transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Camera Viewfinder */}
+            <div className="relative rounded-2xl overflow-hidden bg-black aspect-video flex items-center justify-center border border-slate-700 shadow-inner">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+
+              {/* Viewfinder Target Reticle */}
+              <div className="absolute inset-8 sm:inset-12 border-2 border-dashed border-emerald-400/70 rounded-2xl pointer-events-none flex items-center justify-center">
+                <div className="absolute top-2 left-3 px-2 py-0.5 rounded bg-black/70 text-[11px] font-mono text-emerald-300 border border-emerald-500/40">
+                  Area Target Stiker Spidol
+                </div>
+              </div>
+
+              {/* Status Overlay */}
+              {isOcrProcessing && (
+                <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center gap-3 text-white p-4 text-center">
+                  <Loader2 size={36} className="animate-spin text-emerald-400" />
+                  <p className="text-sm font-semibold text-emerald-300">
+                    {ocrStatusText || 'AI sedang menganalisis tulisan tangan spidol...'}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Mengekstraksi kode stiker dengan model AI Vision...
+                  </p>
+                </div>
+              )}
+
+              {cameraError && (
+                <div className="absolute inset-0 bg-slate-900/95 p-6 flex flex-col items-center justify-center text-center gap-2 text-rose-300">
+                  <AlertTriangle size={36} className="text-rose-400" />
+                  <p className="text-xs">{cameraError}</p>
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="mt-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs text-white border border-slate-600 flex items-center gap-1.5"
+                  >
+                    <RefreshCw size={14} /> Coba Lagi
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* OCR Candidates (if any) */}
+            {ocrCandidates.length > 0 && (
+              <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-700 space-y-1.5">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Kandidat Terbaca (Klik untuk proses):
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {ocrCandidates.map((cand, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setScanInput(cand);
+                        processQuery(cand);
+                        stopCamera();
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700 text-xs font-mono font-bold transition flex items-center gap-1"
+                    >
+                      <CheckCircle2 size={13} /> {cand}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-semibold transition"
+              >
+                Tutup Kamera
+              </button>
+              <button
+                type="button"
+                onClick={captureAndScan}
+                disabled={isOcrProcessing || Boolean(cameraError)}
+                className="flex-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition"
+              >
+                {isOcrProcessing ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Membaca Tulisan Spidol...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} />
+                    📸 Ambil Foto &amp; Baca Spidol
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
