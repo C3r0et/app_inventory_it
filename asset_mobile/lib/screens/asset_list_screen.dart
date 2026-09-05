@@ -337,8 +337,23 @@ class _AssetListScreenState extends State<AssetListScreen> with AutomaticKeepAli
                                     asset.id,
                                     style: TextStyle(fontWeight: FontWeight.bold, color: themeProvider.primaryTextColor, fontSize: 15),
                                   ),
+                                  if (asset.year != null) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                                      ),
+                                      child: Text(
+                                        asset.year!,
+                                        style: const TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
                                   if (asset.legacyInvCode != null && asset.legacyInvCode!.isNotEmpty) ...[
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
@@ -356,7 +371,7 @@ class _AssetListScreenState extends State<AssetListScreen> with AutomaticKeepAli
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Text(
-                                  '${asset.type} • ${asset.location}',
+                                  '${asset.type} • ${asset.location}${asset.year != null ? " • Thn ${asset.year!}" : ""}',
                                   style: TextStyle(color: themeProvider.secondaryTextColor, fontSize: 12),
                                 ),
                               ),

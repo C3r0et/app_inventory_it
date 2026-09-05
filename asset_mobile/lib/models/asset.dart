@@ -91,12 +91,45 @@ class Asset {
     };
   }
 
+  /// Returns the detected year from legacyInvCode, id, note, specs, or updatedAt
+  String? get year {
+    // 1. Check legacyInvCode (e.g., "HD/1126/2025", "MN/0181/2024")
+    if (legacyInvCode != null && legacyInvCode!.isNotEmpty) {
+      final match = RegExp(r'\b(20\d{2})\b').firstMatch(legacyInvCode!);
+      if (match != null) return match.group(1);
+    }
+    // 2. Check id (e.g., "PC/001/2025" or "LAP-2024-001")
+    final idMatch = RegExp(r'\b(20\d{2})\b').firstMatch(id);
+    if (idMatch != null) return idMatch.group(1);
+
+    // 3. Check note (e.g., "26/02/2026", "Tahun 2024")
+    if (note != null && note!.isNotEmpty) {
+      final noteMatch = RegExp(r'\b(20\d{2})\b').firstMatch(note!);
+      if (noteMatch != null) return noteMatch.group(1);
+    }
+
+    // 4. Check specs (e.g., "Th 2023", "2024")
+    if (specs != null && specs!.isNotEmpty) {
+      final specMatch = RegExp(r'\b(20\d{2})\b').firstMatch(specs!);
+      if (specMatch != null) return specMatch.group(1);
+    }
+
+    // 5. Fallback to updatedAt if available
+    if (updatedAt != null) {
+      return updatedAt!.year.toString();
+    }
+
+    return null;
+  }
+
   Asset copyWith({
     String? id,
     String? type,
     String? status,
     String? location,
     String? specs,
+    String? legacyInvCode,
+    String? stickerStatus,
     String? imagePath,
     DateTime? updatedAt,
     String? note,
@@ -108,6 +141,8 @@ class Asset {
       status: status ?? this.status,
       location: location ?? this.location,
       specs: specs ?? this.specs,
+      legacyInvCode: legacyInvCode ?? this.legacyInvCode,
+      stickerStatus: stickerStatus ?? this.stickerStatus,
       imagePath: imagePath ?? this.imagePath,
       updatedAt: updatedAt ?? this.updatedAt,
       note: note ?? this.note,

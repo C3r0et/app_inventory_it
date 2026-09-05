@@ -310,11 +310,50 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                                               ),
                                             ),
                                           ),
+                                          if (asset.year != null) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.amber.withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.calendar_today_rounded, size: 9, color: Colors.amber),
+                                                  const SizedBox(width: 3),
+                                                  Text(
+                                                    asset.year!,
+                                                    style: const TextStyle(
+                                                      color: Colors.amber,
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
                                         ],
                                       ),
-                                      const SizedBox(height: 4),
+                                      if (asset.legacyInvCode != null && asset.legacyInvCode!.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2.0),
+                                          child: Text(
+                                            'Stiker GA: ${asset.legacyInvCode!}',
+                                            style: const TextStyle(
+                                              color: Colors.blueAccent,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              fontFamily: 'monospace',
+                                            ),
+                                          ),
+                                        ),
+                                      const SizedBox(height: 3),
                                       Text(
-                                        '${asset.location} • ${asset.status}',
+                                        '${asset.location} • ${asset.status}${asset.year != null ? " • Thn ${asset.year!}" : ""}',
                                         style: TextStyle(
                                           color: themeProvider.secondaryTextColor,
                                           fontSize: 12,
